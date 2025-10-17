@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超级井字棋 - 人机对战</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#8B5CF6',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glow': '0 0 15px rgba(59, 130, 246, 0.5)',
+                        'glow-win': '0 0 20px rgba(16, 185, 129, 0.7)',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .cell-hover {
+                transition: all 0.2s ease;
+            }
+            .cell-hover:hover:not(.cell-filled) {
+                background-color: rgba(59, 130, 246, 0.1);
+                transform: scale(1.05);
+            }
+            .board-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                grid-template-rows: repeat(3, 1fr);
+                gap: 4px;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .animate-fade-in {
+                animation: fadeIn 0.5s ease-in-out;
+            }
+            .animate-scale-in {
+                animation: scaleIn 0.3s ease-out;
+            }
+            .animate-pulse-slow {
+                animation: pulseSlow 2s infinite;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes scaleIn {
+                from { transform: scale(0.8); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+            @keyframes pulseSlow {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.7; }
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen text-dark">
+    <!-- 顶部导航 -->
+    <header class="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                    <i class="fa fa-th text-white text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">超级井字棋</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="help-btn" class="text-gray-600 hover:text-primary transition-colors">
+                    <i class="fa fa-question-circle mr-1"></i> 帮助
+                </button>
+                <button id="stats-btn" class="text-gray-600 hover:text-primary transition-colors">
+                    <i class="fa fa-bar-chart mr-1"></i> 统计
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 md:py-16">
+        <!-- 游戏标题和状态 -->
+        <div class="text-center mb-8 animate-fade-in">
+            <h2 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold mb-2 text-shadow">人机对战</h2>
+            <p id="game-status" class="text-gray-600 text-lg">你执 <span class="text-primary font-semibold">X</span>，AI执 <span class="text-secondary font-semibold">O</span> - 轮到你了</p>
+        </div>
+        
+        <!-- 游戏设置区域 -->
+        <div class="max-w-md mx-auto mb-8 animate-fade-in">
+            <h3 class="text-center text-lg font-medium mb-4">游戏设置</h3>
+            
+            <!-- 先手/后手选择 -->
+            <div class="mb-6">
+                <p class="text-sm text-gray-500 mb-2 text-center">选择谁先开始</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="first-player-btn" class="starting-btn py-3 rounded-lg bg-primary text-white shadow-glow">
+                        <i class="fa fa-user block mb-1"></i>
+                        <span>你先开始</span>
+                    </button>
+                    <button id="second-player-btn" class="starting-btn py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">
+                        <i class="fa fa-robot block mb-1"></i>
+                        <span>AI先开始</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 难度选择 -->
+            <div>
+                <p class="text-sm text-gray-500 mb-2 text-center">选择难度</p>
+                <div class="grid grid-cols-3 gap-3">
+                    <button class="difficulty-btn py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors" data-difficulty="easy">
+                        <i class="fa fa-smile-o block mb-1"></i>
+                        <span>简单</span>
+                    </button>
+                    <button class="difficulty-btn py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors" data-difficulty="medium">
+                        <i class="fa fa-meh-o block mb-1"></i>
+                        <span>中等</span>
+                    </button>
+                    <button class="difficulty-btn py-3 rounded-lg bg-primary text-white shadow-glow" data-difficulty="hard">
+                        <i class="fa fa-frown-o block mb-1"></i>
+                        <span>困难</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏区域 -->
+        <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-16 max-w-5xl mx-auto">
+            <!-- 棋盘 -->
+            <div class="relative w-full max-w-md aspect-square animate-fade-in" style="animation-delay: 0.2s">
+                <div id="board" class="board-grid w-full h-full bg-dark rounded-xl p-1 shadow-lg">
+                    <!-- 棋盘格子将通过JS动态生成 -->
+                </div>
+                
+                <!-- 加载指示器 (AI思考时显示) -->
+                <div id="ai-thinking" class="hidden absolute inset-0 bg-dark/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-gray-300 border-t-primary rounded-full animate-spin mb-4"></div>
+                    <p class="text-white font-medium">AI正在思考...</p>
+                </div>
+                
+                <!-- 游戏结果覆盖层 -->
+                <div id="game-result" class="hidden absolute inset-0 bg-dark/80 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center">
+                    <h3 id="result-text" class="text-2xl font-bold text-white mb-6"></h3>
+                    <button id="play-again" class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all shadow-glow">
+                        再来一局
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 游戏信息和控制 -->
+            <div class="w-full max-w-md animate-fade-in" style="animation-delay: 0.4s">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fa fa-info-circle text-primary mr-2"></i> 游戏信息
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <span class="inline-block w-6 h-6 rounded-md bg-primary/20 text-primary flex items-center justify-center mr-2">X</span>
+                                <span>你的回合</span>
+                            </div>
+                            <span id="player-wins" class="font-semibold">0</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <span class="inline-block w-6 h-6 rounded-md bg-secondary/20 text-secondary flex items-center justify-center mr-2">O</span>
+                                <span>AI 回合</span>
+                            </div>
+                            <span id="ai-wins" class="font-semibold">0</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <span class="inline-block w-6 h-6 rounded-md bg-gray-200 text-gray-600 flex items-center justify-center mr-2">
+                                    <i class="fa fa-refresh text-xs"></i>
+                                </span>
+                                <span>平局</span>
+                            </div>
+                            <span id="draws" class="font-semibold">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 pt-4 border-t border-gray-100">
+                        <div class="flex justify-between">
+                            <button id="new-game" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                <i class="fa fa-gamepad mr-1"></i> 新游戏
+                            </button>
+                            <button id="undo-move" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                <i class="fa fa-undo mr-1"></i> 悔棋
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 提示和技巧 -->
+                <div class="bg-gradient-to-br from-primary/5 to-accent/5 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold mb-3 flex items-center">
+                        <i class="fa fa-lightbulb-o text-accent mr-2"></i> 游戏技巧
+                    </h3>
+                    <ul class="space-y-2 text-gray-600 text-sm">
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
+                            <span>先占据中心位置通常是优势开局</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
+                            <span>始终注意阻止AI形成三子连线</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
+                            <span>尝试创造多种获胜方式让AI难以防守</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-exclamation-circle text-accent mt-1 mr-2"></i>
+                            <span>在困难模式下，AI不会犯错，完美防守所有进攻</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 帮助模态框 -->
+    <div id="help-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 animate-scale-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">游戏规则</h3>
+                <button id="close-help" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4 text-gray-700">
+                <p>井字棋是一种经典的两人对战游戏，在3×3的网格上进行。</p>
+                
+                <h4 class="font-semibold text-lg">基本规则：</h4>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li>你执X，AI执O，轮流在格子中落子</li>
+                    <li>率先在横向、纵向或对角线上形成三子连线者获胜</li>
+                    <li>如果所有格子都被填满但无人获胜，则判定为平局</li>
+                </ul>
+                
+                <h4 class="font-semibold text-lg">难度说明：</h4>
+                <ul class="list-disc pl-5 space-y-2">
+                    <li><strong>简单</strong>：AI会犯一些错误，适合初学者</li>
+                    <li><strong>中等</strong>：AI有较好的防守，但仍有机会击败</li>
+                    <li><strong>困难</strong>：AI使用最优算法，从不犯错，完美防守</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 统计模态框 -->
+    <div id="stats-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 animate-scale-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">游戏统计</h3>
+                <button id="close-stats" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-6 text-gray-700">
+                <div class="text-center">
+                    <div class="text-sm text-gray-500 mb-2">总对战次数</div>
+                    <div id="total-games" class="text-3xl font-bold text-primary">0</div>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-4 text-center">
+                    <div class="bg-primary/10 rounded-lg p-4">
+                        <div class="text-sm text-gray-500 mb-1">你的胜率</div>
+                        <div id="player-win-rate" class="text-xl font-bold text-primary">0%</div>
+                    </div>
+                    <div class="bg-secondary/10 rounded-lg p-4">
+                        <div class="text-sm text-gray-500 mb-1">AI胜率</div>
+                        <div id="ai-win-rate" class="text-xl font-bold text-secondary">0%</div>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg p-4">
+                        <div class="text-sm text-gray-500 mb-1">平局率</div>
+                        <div id="draw-rate" class="text-xl font-bold text-gray-600">0%</div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 class="font-semibold mb-3">按难度统计</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>简单难度</span>
+                                <span id="easy-games">0 场</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="easy-win-bar" class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>中等难度</span>
+                                <span id="medium-games">0 场</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="medium-win-bar" class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>困难难度</span>
+                                <span id="hard-games">0 场</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="hard-win-bar" class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="reset-stats" class="w-full py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                    <i class="fa fa-trash mr-1"></i> 重置统计数据
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-white/80 backdrop-blur-sm py-6 mt-12">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>超级井字棋 &copy; 2023 - 超强AI对战体验</p>
+            <p class="mt-1">困难模式使用 minimax 算法，AI从不犯错</p>
+        </div>
+    </footer>
+
+    <script>
+        // 游戏状态变量
+        let board = Array(9).fill('');
+        let currentPlayer = 'X'; // 玩家是X，AI是O
+        let gameActive = true;
+        let difficulty = 'hard'; // 默认困难模式
+        let moveHistory = [];
+        let playerStarts = true; // 默认为玩家先开始
+        
+        // 游戏统计
+        let stats = {
+            playerWins: 0,
+            aiWins: 0,
+            draws: 0,
+            totalGames: 0,
+            byDifficulty: {
+                easy: { games: 0, wins: 0 },
+                medium: { games: 0, wins: 0 },
+                hard: { games: 0, wins: 0 }
+            },
+            byStarting: {
+                player: { games: 0, wins: 0 },
+                ai: { games: 0, wins: 0 }
+            }
+        };
+        
+        // 胜利组合
+        const winCombos = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // 横向
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // 纵向
+            [0, 4, 8], [2, 4, 6]             // 对角线
+        ];
+        
+        // DOM 元素
+        const boardElement = document.getElementById('board');
+        const gameStatusElement = document.getElementById('game-status');
+        const aiThinkingElement = document.getElementById('ai-thinking');
+        const gameResultElement = document.getElementById('game-result');
+        const resultTextElement = document.getElementById('result-text');
+        const playAgainButton = document.getElementById('play-again');
+        const newGameButton = document.getElementById('new-game');
+        const undoMoveButton = document.getElementById('undo-move');
+        const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+        const startingButtons = document.querySelectorAll('.starting-btn');
+        const firstPlayerButton = document.getElementById('first-player-btn');
+        const secondPlayerButton = document.getElementById('second-player-btn');
+        
+        // 统计元素
+        const playerWinsElement = document.getElementById('player-wins');
+        const aiWinsElement = document.getElementById('ai-wins');
+        const drawsElement = document.getElementById('draws');
+        
+        // 模态框元素
+        const helpBtn = document.getElementById('help-btn');
+        const statsBtn = document.getElementById('stats-btn');
+        const helpModal = document.getElementById('help-modal');
+        const statsModal = document.getElementById('stats-modal');
+        const closeHelpBtn = document.getElementById('close-help');
+        const closeStatsBtn = document.getElementById('close-stats');
+        const resetStatsBtn = document.getElementById('reset-stats');
+        
+        // 初始化游戏
+        function initGame() {
+            // 加载保存的统计数据
+            loadStats();
+            updateStatsDisplay();
+            
+            // 创建棋盘
+            createBoard();
+            
+            // 更新游戏状态显示
+            updateGameStatus();
+            
+            // 添加事件监听器
+            addEventListeners();
+        }
+        
+        // 创建棋盘
+        function createBoard() {
+            boardElement.innerHTML = '';
+            
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell', 'cell-hover', 'bg-white', 'rounded-md', 'flex', 'items-center', 'justify-center', 'text-4xl', 'font-bold', 'cursor-pointer');
+                cell.dataset.index = i;
+                
+                boardElement.appendChild(cell);
+            }
+        }
+        
+        // 添加事件监听器
+        function addEventListeners() {
+            // 单元格点击事件
+            boardElement.addEventListener('click', (e) => {
+                if (e.target.classList.contains('cell')) {
+                    const index = parseInt(e.target.dataset.index);
+                    handleCellClick(index);
+                }
+            });
+            
+            // 再来一局按钮
+            playAgainButton.addEventListener('click', resetGame);
+            
+            // 新游戏按钮
+            newGameButton.addEventListener('click', resetGame);
+            
+            // 悔棋按钮
+            undoMoveButton.addEventListener('click', undoMove);
+            
+            // 难度选择按钮
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // 更新按钮样式
+                    difficultyButtons.forEach(btn => {
+                        btn.classList.remove('bg-primary', 'text-white', 'shadow-glow');
+                        btn.classList.add('bg-gray-100', 'hover:bg-gray-200');
+                    });
+                    
+                    button.classList.remove('bg-gray-100', 'hover:bg-gray-200');
+                    button.classList.add('bg-primary', 'text-white', 'shadow-glow');
+                    
+                    // 设置难度
+                    difficulty = button.dataset.difficulty;
+                    
+                    // 重置游戏
+                    resetGame();
+                });
+            });
+            
+            // 先手/后手选择按钮
+            startingButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // 更新按钮样式
+                    startingButtons.forEach(btn => {
+                        btn.classList.remove('bg-primary', 'text-white', 'shadow-glow');
+                        btn.classList.add('bg-gray-100', 'hover:bg-gray-200');
+                    });
+                    
+                    button.classList.remove('bg-gray-100', 'hover:bg-gray-200');
+                    button.classList.add('bg-primary', 'text-white', 'shadow-glow');
+                    
+                    // 设置谁先开始
+                    playerStarts = button.id === 'first-player-btn';
+                    
+                    // 重置游戏
+                    resetGame();
+                });
+            });
+            
+            // 帮助模态框
+            helpBtn.addEventListener('click', () => {
+                helpModal.classList.remove('hidden');
+            });
+            
+            closeHelpBtn.addEventListener('click', () => {
+                helpModal.classList.add('hidden');
+            });
+            
+            // 统计模态框
+            statsBtn.addEventListener('click', () => {
+                updateStatsModal();
+                statsModal.classList.remove('hidden');
+            });
+            
+            closeStatsBtn.addEventListener('click', () => {
+                statsModal.classList.add('hidden');
+            });
+            
+            // 重置统计数据
+            resetStatsBtn.addEventListener('click', () => {
+                if (confirm('确定要重置所有统计数据吗？此操作不可恢复。')) {
+                    resetAllStats();
+                    updateStatsDisplay();
+                    updateStatsModal();
+                }
+            });
+            
+            // 点击模态框外部关闭
+            helpModal.addEventListener('click', (e) => {
+                if (e.target === helpModal) helpModal.classList.add('hidden');
+            });
+            
+            statsModal.addEventListener('click', (e) => {
+                if (e.target === statsModal) statsModal.classList.add('hidden');
+            });
+        }
+        
+        // 处理单元格点击
+        function handleCellClick(index) {
+            // 检查游戏是否活跃，单元格是否已被填充，是否是玩家回合
+            if (!gameActive || board[index] !== '' || currentPlayer !== 'X') {
+                return;
+            }
+            
+            // 记录历史
+            moveHistory.push([...board]);
+            
+            // 更新棋盘和UI
+            board[index] = 'X';
+            updateBoardUI();
+            
+            // 检查游戏状态
+            if (checkWinner()) {
+                gameActive = false;
+                stats.playerWins++;
+                stats.totalGames++;
+                stats.byDifficulty[difficulty].games++;
+                stats.byDifficulty[difficulty].wins++;
+                stats.byStarting[playerStarts ? 'player' : 'ai'].games++;
+                stats.byStarting[playerStarts ? 'player' : 'ai'].wins++;
+                saveStats();
+                updateStatsDisplay();
+                showResult('你赢了！🎉');
+                return;
+            }
+            
+            if (checkDraw()) {
+                gameActive = false;
+                stats.draws++;
+                stats.totalGames++;
+                stats.byDifficulty[difficulty].games++;
+                stats.byStarting[playerStarts ? 'player' : 'ai'].games++;
+                saveStats();
+                updateStatsDisplay();
+                showResult('平局！🤝');
+                return;
+            }
+            
+            // 切换到AI回合
+            currentPlayer = 'O';
+            updateGameStatus();
+            
+            // AI走棋
+            setTimeout(aiMove, 500); // 稍微延迟，让玩家看到AI在"思考"
+        }
+        
+        // AI走棋
+        function aiMove() {
+            if (!gameActive) return;
+            
+            // 显示AI思考状态
+            aiThinkingElement.classList.remove('hidden');
+            
+            let bestMove;
+            
+            // 根据难度选择不同的AI策略
+            switch(difficulty) {
+                case 'easy':
+                    // 简单难度：随机选择，偶尔犯错误
+                    bestMove = getEasyAIMove();
+                    break;
+                case 'medium':
+                    // 中等难度：较好的策略，但偶尔犯错误
+                    bestMove = getMediumAIMove();
+                    break;
+                case 'hard':
+                default:
+                    // 困难难度：使用minimax算法，最优走法
+                    bestMove = getHardAIMove();
+                    break;
+            }
+            
+            // 延迟隐藏思考状态，让体验更自然
+            setTimeout(() => {
+                // 记录历史
+                moveHistory.push([...board]);
+                
+                // 执行AI的走法
+                board[bestMove] = 'O';
+                updateBoardUI();
+                
+                // 隐藏AI思考状态
+                aiThinkingElement.classList.add('hidden');
+                
+                // 检查游戏状态
+                if (checkWinner()) {
+                    gameActive = false;
+                    stats.aiWins++;
+                    stats.totalGames++;
+                    stats.byDifficulty[difficulty].games++;
+                    stats.byStarting[playerStarts ? 'player' : 'ai'].games++;
+                    saveStats();
+                    updateStatsDisplay();
+                    showResult('AI赢了！😢');
+                    return;
+                }
+                
+                if (checkDraw()) {
+                    gameActive = false;
+                    stats.draws++;
+                    stats.totalGames++;
+                    stats.byDifficulty[difficulty].games++;
+                    stats.byStarting[playerStarts ? 'player' : 'ai'].games++;
+                    saveStats();
+                    updateStatsDisplay();
+                    showResult('平局！🤝');
+                    return;
+                }
+                
+                // 切换回玩家回合
+                currentPlayer = 'X';
+                updateGameStatus();
+            }, 500);
+        }
+        
+        // 简单AI：随机选择可用位置
+        function getEasyAIMove() {
+            // 20%的概率随机走棋（可能犯错误）
+            if (Math.random() < 0.2) {
+                return getRandomMove();
+            }
+            
+            // 80%的概率寻找能立即获胜的走法，否则随机
+            const winningMove = findWinningMove('O');
+            if (winningMove !== -1) return winningMove;
+            
+            // 尝试阻止玩家的获胜走法
+            const blockingMove = findWinningMove('X');
+            if (blockingMove !== -1) return blockingMove;
+            
+            return getRandomMove();
+        }
+        
+        // 中等AI：较好的策略，但偶尔犯错误
+        function getMediumAIMove() {
+            // 10%的概率随机走棋（偶尔犯错误）
+            if (Math.random() < 0.1) {
+                return getRandomMove();
+            }
+            
+            // 寻找能立即获胜的走法
+            const winningMove = findWinningMove('O');
+            if (winningMove !== -1) return winningMove;
+            
+            // 阻止玩家的获胜走法
+            const blockingMove = findWinningMove('X');
+            if (blockingMove !== -1) return blockingMove;
+            
+            // 优先选择中心
+            if (board[4] === '') return 4;
+            
+            // 然后选择角落
+            const corners = [0, 2, 6, 8];
+            const availableCorners = corners.filter(index => board[index] === '');
+            if (availableCorners.length > 0) {
+                return availableCorners[Math.floor(Math.random() * availableCorners.length)];
+            }
+            
+            // 最后选择边缘
+            const edges = [1, 3, 5, 7];
+            const availableEdges = edges.filter(index => board[index] === '');
+            if (availableEdges.length > 0) {
+                return availableEdges[Math.floor(Math.random() * availableEdges.length)];
+            }
+            
+            return getRandomMove();
+        }
+        
+        // 困难AI：使用minimax算法，最优走法
+        function getHardAIMove() {
+            // 使用minimax算法找到最优走法
+            return minimax(board, 'O').index;
+        }
+        
+        // Minimax算法实现
+        function minimax(currentBoard, player) {
+            // 获取所有可用位置
+            const availableMoves = getAvailableMoves(currentBoard);
+            
+            // 终端状态检查
+            if (checkWinnerForBoard(currentBoard, 'O')) {
+                return { score: 10 };
+            } else if (checkWinnerForBoard(currentBoard, 'X')) {
+                return { score: -10 };
+            } else if (availableMoves.length === 0) {
+                return { score: 0 };
+            }
+            
+            // 收集所有可能的走法及其评分
+            const moves = [];
+            
+            for (let i = 0; i < availableMoves.length; i++) {
+                // 创建一个新对象存储当前走法
+                const move = {};
+                move.index = availableMoves[i];
+                
+                // 尝试当前走法
+                currentBoard[availableMoves[i]] = player;
+                
+                // 递归计算评分
+                if (player === 'O') {
+                    // AI回合，最大化评分
+                    const result = minimax(currentBoard, 'X');
+                    move.score = result.score;
+                } else {
+                    // 玩家回合，最小化评分
+                    const result = minimax(currentBoard, 'O');
+                    move.score = result.score;
+                }
+                
+                // 撤销走法
+                currentBoard[availableMoves[i]] = '';
+                
+                // 存储走法
+                moves.push(move);
+            }
+            
+            // 选择最佳走法
+            let bestMove;
+            if (player === 'O') {
+                // AI尝试最大化评分
+                let bestScore = -Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score > bestScore) {
+                        bestScore = moves[i].score;
+                        bestMove = i;
+                    }
+                }
+            } else {
+                // 玩家尝试最小化评分
+                let bestScore = Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score < bestScore) {
+                        bestScore = moves[i].score;
+                        bestMove = i;
+                    }
+                }
+            }
+            
+            // 返回最佳走法
+            return moves[bestMove];
+        }
+        
+        // 寻找能立即获胜的走法
+        function findWinningMove(player) {
+            for (let i = 0; i < board.length; i++) {
+                if (board[i] === '') {
+                    // 尝试走这一步
+                    board[i] = player;
+                    
+                    // 检查是否获胜
+                    const isWinning = checkWinnerForBoard(board, player);
+                    
+                    // 撤销走法
+                    board[i] = '';
+                    
+                    if (isWinning) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
+        
+        // 获取随机可用位置
+        function getRandomMove() {
+            const availableMoves = getAvailableMoves(board);
+            return availableMoves[Math.floor(Math.random() * availableMoves.length)];
+        }
+        
+        // 获取所有可用位置
+        function getAvailableMoves(currentBoard) {
+            return currentBoard.map((val, index) => val === '' ? index : null).filter(val => val !== null);
+        }
+        
+        // 检查是否有获胜者（针对当前棋盘）
+        function checkWinner() {
+            return checkWinnerForBoard(board, currentPlayer);
+        }
+        
+        // 检查指定棋盘是否有指定玩家获胜
+        function checkWinnerForBoard(currentBoard, player) {
+            return winCombos.some(combo => {
+                return combo.every(index => currentBoard[index] === player);
+            });
+        }
+        
+        // 检查是否平局
+        function checkDraw() {
+            return board.every(cell => cell !== '') && !checkWinner();
+        }
+        
+        // 更新棋盘UI
+        function updateBoardUI() {
+            const cells = boardElement.querySelectorAll('.cell');
+            
+            cells.forEach((cell, index) => {
+                // 清空单元格
+                cell.textContent = '';
+                cell.classList.remove('text-primary', 'text-secondary', 'cell-filled', 'shadow-glow-win');
+                
+                // 如果有棋子，更新显示
+                if (board[index] === 'X') {
+                    cell.textContent = 'X';
+                    cell.classList.add('text-primary', 'cell-filled', 'animate-scale-in');
+                } else if (board[index] === 'O') {
+                    cell.textContent = 'O';
+                    cell.classList.add('text-secondary', 'cell-filled', 'animate-scale-in');
+                }
+            });
+            
+            // 如果游戏结束，高亮显示获胜的连线
+            if (!gameActive) {
+                const winner = checkWinnerForBoard(board, 'X') ? 'X' : 
+                              checkWinnerForBoard(board, 'O') ? 'O' : null;
+                
+                if (winner) {
+                    for (const combo of winCombos) {
+                        if (combo.every(index => board[index] === winner)) {
+                            combo.forEach(index => {
+                                cells[index].classList.add('shadow-glow-win');
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 更新游戏状态显示
+        function updateGameStatus() {
+            if (gameActive) {
+                if (currentPlayer === 'X') {
+                    gameStatusElement.innerHTML = '你执 <span class="text-primary font-semibold">X</span>，AI执 <span class="text-secondary font-semibold">O</span> - 轮到你了';
+                } else {
+                    gameStatusElement.innerHTML = '你执 <span class="text-primary font-semibold">X</span>，AI执 <span class="text-secondary font-semibold">O</span> - AI思考中...';
+                }
+            }
+        }
+        
+        // 显示游戏结果
+        function showResult(text) {
+            resultTextElement.textContent = text;
+            gameResultElement.classList.remove('hidden');
+        }
+        
+        // 重置游戏
+        function resetGame() {
+            board = Array(9).fill('');
+            gameActive = true;
+            moveHistory = [];
+            
+            // 根据设置决定谁先开始
+            currentPlayer = playerStarts ? 'X' : 'O';
+            
+            updateBoardUI();
+            updateGameStatus();
+            
+            gameResultElement.classList.add('hidden');
+            
+            // 如果是AI先开始，AI直接走第一步
+            if (!playerStarts) {
+                setTimeout(aiMove, 300);
+            }
+        }
+        
+        // 悔棋功能
+        function undoMove() {
+            // 至少需要两步才能悔棋（玩家和AI各走一步）
+            if (moveHistory.length >= (playerStarts ? 2 : 1) && gameActive) {
+                // 如果是AI先开始，第一步悔棋只需要撤销一步
+                const stepsToUndo = playerStarts ? 2 : 1;
+                
+                for (let i = 0; i < stepsToUndo; i++) {
+                    moveHistory.pop();
+                }
+                
+                const previousBoard = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
+                
+                if (previousBoard) {
+                    board = [...previousBoard];
+                } else {
+                    board = Array(9).fill('');
+                }
+                
+                currentPlayer = 'X';
+                updateBoardUI();
+                updateGameStatus();
+            }
+        }
+        
+        // 更新统计显示
+        function updateStatsDisplay() {
+            playerWinsElement.textContent = stats.playerWins;
+            aiWinsElement.textContent = stats.aiWins;
+            drawsElement.textContent = stats.draws;
+        }
+        
+        // 更新统计模态框
+        function updateStatsModal() {
+            document.getElementById('total-games').textContent = stats.totalGames;
+            
+            // 计算胜率
+            const total = stats.playerWins + stats.aiWins + stats.draws;
+            const playerWinRate = total > 0 ? Math.round((stats.playerWins / total) * 100) : 0;
+            const aiWinRate = total > 0 ? Math.round((stats.aiWins / total) * 100) : 0;
+            const drawRate = total > 0 ? Math.round((stats.draws / total) * 100) : 0;
+            
+            document.getElementById('player-win-rate').textContent = `${playerWinRate}%`;
+            document.getElementById('ai-win-rate').textContent = `${aiWinRate}%`;
+            document.getElementById('draw-rate').textContent = `${drawRate}%`;
+            
+            // 按难度统计
+            for (const diff of ['easy', 'medium', 'hard']) {
+                const games = stats.byDifficulty[diff].games;
+                const wins = stats.byDifficulty[diff].wins;
+                const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                
+                document.getElementById(`${diff}-games`).textContent = `${games} 场`;
+                document.getElementById(`${diff}-win-bar`).style.width = `${winRate}%`;
+            }
+        }
+        
+        // 保存统计数据到localStorage
+        function saveStats() {
+            localStorage.setItem('ticTacToeStats', JSON.stringify(stats));
+        }
+        
+        // 从localStorage加载统计数据
+        function loadStats() {
+            const savedStats = localStorage.getItem('ticTacToeStats');
+            if (savedStats) {
+                stats = JSON.parse(savedStats);
+            }
+        }
+        
+        // 重置所有统计数据
+        function resetAllStats() {
+            stats = {
+                playerWins: 0,
+                aiWins: 0,
+                draws: 0,
+                totalGames: 0,
+                byDifficulty: {
+                    easy: { games: 0, wins: 0 },
+                    medium: { games: 0, wins: 0 },
+                    hard: { games: 0, wins: 0 }
+                },
+                byStarting: {
+                    player: { games: 0, wins: 0 },
+                    ai: { games: 0, wins: 0 }
+                }
+            };
+            saveStats();
+        }
+        
+        // 初始化游戏
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
+    
